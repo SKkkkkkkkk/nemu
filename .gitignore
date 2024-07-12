@@ -2,5 +2,6 @@ include/config
 include/generated
 build/
 .config
+.config.old
 .vscode/
 compile_commands.json
