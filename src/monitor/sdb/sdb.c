@@ -52,6 +52,27 @@ static int cmd_q(char *args) {
   return -1;
 }
 
+static int cmd_si(char *args) {
+  char *arg = strtok(NULL, " ");
+  int steps = 1;
+  if (arg != NULL) {
+    steps = atoi(arg);
+  }
+  cpu_exec(steps);
+  return 0;
+}
+
+static int cmd_info(char *args) {
+  char *arg = strtok(NULL, " ");
+  if ((arg == NULL) || (strcmp(arg, "r") == 0)) {
+    isa_reg_display();
+  }
+  // else if (strcmp(arg, "w") == 0) {
+  //   print_wp();
+  // }
+  return 0;
+}
+
 static int cmd_help(char *args);
 
 static struct {
@@ -61,6 +82,12 @@ static struct {
 } cmd_table [] = {
   { "help", "Display information about all supported commands", cmd_help },
   { "c", "Continue the execution of the program", cmd_c },
+  { "si", "Execute N instructions in a single step", cmd_si },
+  { "info", "Print the state of the program", cmd_info },
+  // { "x", "Examine memory", cmd_x },
+  // { "p", "Print the value of an expression", cmd_p },
+  // { "w", "Set a watchpoint", cmd_w },
+  // { "d", "Delete a watchpoint", cmd_d },
   { "q", "Exit NEMU", cmd_q },
 
   /* TODO: Add more commands */
