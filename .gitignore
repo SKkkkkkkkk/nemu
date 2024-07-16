@@ -5,3 +5,4 @@ build/
 .config.old
 .vscode/
 compile_commands.json
+*.log
