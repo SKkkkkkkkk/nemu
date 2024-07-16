@@ -23,6 +23,7 @@ SECTIONS
  {
   _data_start = .;
   *(SORT_BY_ALIGNMENT(.data*))
+  *(.sdata*)
   . = ALIGN(16);
   _data_end = .;
  } >DRAM AT>DRAM
@@ -33,6 +34,7 @@ SECTIONS
  {
   _bss_start = .;
   *(SORT_BY_ALIGNMENT(.bss*))
+  *(.sbss*)
   *(COMMON)
   . = ALIGN(16);
   _bss_end = .;
