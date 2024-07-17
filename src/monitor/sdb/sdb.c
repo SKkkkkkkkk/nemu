@@ -18,6 +18,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "sdb.h"
+#include <memory/vaddr.h>
 
 static int is_batch_mode = false;
 
@@ -73,6 +74,31 @@ static int cmd_info(char *args) {
   return 0;
 }
 
+// x N addr
+static int cmd_x(char *args) {
+  char *arg1 = strtok(NULL, " ");
+  char *arg2 = strtok(NULL, " ");
+  if (arg1 == NULL || arg2 == NULL) {
+    printf("x N EXPR\n");
+    return 0;
+  }
+
+  int n = atoi(arg1);
+  if (n <= 0)
+    return 0;
+
+  vaddr_t addr = strtol(arg2, NULL, 16);
+  for (int i = 0; i < n; i++) {
+    printf("0x%x: ", addr);
+    for (int j = 0; j < 4; j++) {
+      printf("0x%02x ", vaddr_read(addr, 1));
+      addr++;
+    }
+    printf("\n");
+  }
+  return 0;
+}
+
 static int cmd_help(char *args);
 
 static struct {
@@ -84,7 +110,7 @@ static struct {
   { "c", "Continue the execution of the program", cmd_c },
   { "si", "Execute N instructions in a single step", cmd_si },
   { "info", "Print the state of the program", cmd_info },
-  // { "x", "Examine memory", cmd_x },
+  { "x", "Examine memory", cmd_x },
   // { "p", "Print the value of an expression", cmd_p },
   // { "w", "Set a watchpoint", cmd_w },
   // { "d", "Delete a watchpoint", cmd_d },
