@@ -74,20 +74,26 @@ static int cmd_info(char *args) {
   return 0;
 }
 
-// x N addr
+// x N EXPR
 static int cmd_x(char *args) {
-  char *arg1 = strtok(NULL, " ");
-  char *arg2 = strtok(NULL, " ");
-  if (arg1 == NULL || arg2 == NULL) {
+  char *N = strtok(args, " ");
+  if (N == NULL) {
     printf("x N EXPR\n");
     return 0;
   }
 
-  int n = atoi(arg1);
+  int n = atoi(N);
   if (n <= 0)
     return 0;
 
-  vaddr_t addr = strtol(arg2, NULL, 16);
+  bool success = true;
+  char *EXPR = N + strlen(N) + 1;
+  word_t addr = expr(EXPR, &success);
+  if (!success) {
+    printf("Invalid expression\n");
+    return 0;
+  }
+
   for (int i = 0; i < n; i++) {
     printf("0x%x: ", addr);
     for (int j = 0; j < 4; j++) {

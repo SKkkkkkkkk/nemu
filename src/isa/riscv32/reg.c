@@ -17,23 +17,48 @@
 #include "local-include/reg.h"
 
 #define R(i) gpr(i)
-const char *regs[] = {
-  "x0(zero)", "x1(ra)", "x2(sp)", "x3(gp)",
-  "x4(tp)", "x5(t0)", "x6(t1)", "x7(t2)",
-  "x8(s0/fp)", "x9(s1)", "x10(a0)", "x11(a1)",
-  "x12(a2)", "x13(a3)", "x14(a4)", "x15(a5)",
-  "x16(a6)", "x17(a7)", "x18(s2)", "x19(s3)",
-  "x20(s4)", "x21(s5)", "x22(s6)", "x23(s7)",
-  "x24(s8)", "x25(s9)", "x26(s10)", "x27(s11)",
-  "x28(t3)", "x29(t4)", "x30(t5)", "x31(t6)"
+#define REGS_SIZE (sizeof(cpu.gpr) / sizeof(cpu.gpr[0]))
+const char *regs_name[REGS_SIZE] = {
+  "x0", "x1", "x2", "x3",
+  "x4", "x5", "x6", "x7",
+  "x8", "x9", "x10", "x11",
+  "x12", "x13", "x14", "x15",
+  "x16", "x17", "x18", "x19",
+  "x20", "x21", "x22", "x23",
+  "x24", "x25", "x26", "x27",
+  "x28", "x29", "x30", "x31"
+};
+
+const char *regs_abi_name[REGS_SIZE] = {
+  "zero", "ra", "sp", "gp",
+  "tp", "t0", "t1", "t2",
+  "s0", "s1", "a0", "a1",
+  "a2", "a3", "a4", "a5",
+  "a6", "a7", "s2", "s3",
+  "s4", "s5", "s6", "s7",
+  "s8", "s9", "s10", "s11",
+  "t3", "t4", "t5", "t6"
 };
 
 void isa_reg_display() {
-  for (int i = 0; i < 32; i ++) {
-    log_write("%-12s: 0x%08x\n", regs[i], R(i));
+  log_write("Register Name  ABI Name   Value\n");
+  log_write("-------------  ---------  ----------\n");
+  for (int i = 0; i < REGS_SIZE; i++) {
+    log_write("%-13s  %-9s  0x%08x\n", regs_name[i], regs_abi_name[i], R(i));
   }
 }
 
-word_t isa_reg_str2val(const char *s, bool *success) {
+word_t isa_reg_str2val(const char *s, const uint8_t lenth, bool *success) {
+  if ((lenth == 0) || (lenth > 4)) {
+    *success = false;
+    return 0;
+  }
+  for (int i = 0; i < REGS_SIZE; i ++) {
+    if (strncmp(regs_name[i], s, lenth) == 0 || strncmp(regs_abi_name[i], s, lenth) == 0) {
+      *success = true;
+      return R(i);
+    }
+  }
+  *success = false;
   return 0;
 }

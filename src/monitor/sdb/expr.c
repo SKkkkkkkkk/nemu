@@ -1,59 +1,37 @@
-/***************************************************************************************
-* Copyright (c) 2014-2022 Zihao Yu, Nanjing University
-*
-* NEMU is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2.
-* You may obtain a copy of Mulan PSL v2 at:
-*          http://license.coscl.org.cn/MulanPSL2
-*
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-*
-* See the Mulan PSL v2 for more details.
-***************************************************************************************/
-
 #include <isa.h>
-
-/* We use the POSIX regex functions to process regular expressions.
- * Type 'man regex' for more information about POSIX regex functions.
- */
 #include <regex.h>
-
-enum {
-  TK_NOTYPE = 256, TK_EQ,
-
-  /* TODO: Add more token types */
-
-};
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
 
 static struct rule {
   const char *regex;
   int token_type;
 } rules[] = {
-
-  /* TODO: Add more rules.
-   * Pay attention to the precedence level of different rules.
-   */
-
-  {" +", TK_NOTYPE},    // spaces
-  {"\\+", '+'},         // plus
-  {"==", TK_EQ},        // equal
+  {"0x[0-9a-fA-F]+", 'h'}, // hex number
+  {"[0-9]+",  'd'}, // decimal number
+  {"\\$[0-9a-zA-Z]+", 'r'}, // register
+  {"\\(",     '('}, // left bracket
+  {"\\)",     ')'}, // right bracket
+  {"\\+",     '+'}, // plus
+  {"-",       '-'}, // minus
+  {"\\*",     '*'}, // multiply
+  {"/",       '/'}, // divide
+  {" +",      ' '}, // spaces
+  {"==",      '='}, // equal
 };
 
-#define NR_REGEX ARRLEN(rules)
+#define NR_REGEX (sizeof(rules) / sizeof(rules[0]))
 
 static regex_t re[NR_REGEX] = {};
 
-/* Rules are used for many times.
- * Therefore we compile them only once before any usage.
- */
 void init_regex() {
   int i;
   char error_msg[128];
   int ret;
 
-  for (i = 0; i < NR_REGEX; i ++) {
+  for (i = 0; i < NR_REGEX; i++) {
     ret = regcomp(&re[i], rules[i].regex, REG_EXTENDED);
     if (ret != 0) {
       regerror(ret, &re[i], error_msg, 128);
@@ -67,8 +45,8 @@ typedef struct token {
   char str[32];
 } Token;
 
-static Token tokens[32] __attribute__((used)) = {};
-static int nr_token __attribute__((used))  = 0;
+static Token tokens[32] = {};
+static int nr_token = 0;
 
 static bool make_token(char *e) {
   int position = 0;
@@ -78,24 +56,74 @@ static bool make_token(char *e) {
   nr_token = 0;
 
   while (e[position] != '\0') {
-    /* Try all rules one by one. */
-    for (i = 0; i < NR_REGEX; i ++) {
+    if (nr_token >= (sizeof(tokens) / sizeof(Token))) {
+      printf("Too many tokens\n");
+      return false;
+    }
+
+    for (i = 0; i < NR_REGEX; i++) {
       if (regexec(&re[i], e + position, 1, &pmatch, 0) == 0 && pmatch.rm_so == 0) {
         char *substr_start = e + position;
         int substr_len = pmatch.rm_eo;
 
-        Log("match rules[%d] = \"%s\" at position %d with len %d: %.*s",
-            i, rules[i].regex, position, substr_len, substr_len, substr_start);
-
         position += substr_len;
 
-        /* TODO: Now a new token is recognized with rules[i]. Add codes
-         * to record the token in the array `tokens'. For certain types
-         * of tokens, some extra actions should be performed.
-         */
-
         switch (rules[i].token_type) {
-          default: TODO();
+          case ' ':
+            break;
+          case 'd':
+            tokens[nr_token].type = rules[i].token_type;
+            strncpy(tokens[nr_token].str, substr_start, substr_len);
+            tokens[nr_token].str[substr_len] = '\0';
+            nr_token++;
+            break;
+          case 'h':
+            tokens[nr_token].type = 'd';
+            substr_start += 2;
+            substr_len -= 2;
+            // cover hex number to decimal number
+            word_t hex = 0;
+            for (int i=0; i<substr_len; i++) {
+              if (substr_start[i] >= '0' && substr_start[i] <= '9') {
+                hex = hex * 16 + substr_start[i] - '0';
+              } else if (substr_start[i] >= 'a' && substr_start[i] <= 'f') {
+                hex = hex * 16 + substr_start[i] - 'a' + 10;
+              } else if (substr_start[i] >= 'A' && substr_start[i] <= 'F') {
+                hex = hex * 16 + substr_start[i] - 'A' + 10;
+              }
+            }
+            sprintf(tokens[nr_token].str, "%u", hex);
+            nr_token++;
+            break;
+          case 'r':
+            tokens[nr_token].type = 'd';
+            bool success = true;
+            word_t reg_val = isa_reg_str2val(substr_start + 1, substr_len - 1, &success);
+            if (!success) {
+              printf("Invalid register name: ");
+              for (int i = 0; i < substr_len; i++)
+                putchar(substr_start[i]);
+              putchar('\n');
+              return false;
+            }
+            sprintf(tokens[nr_token].str, "%u", reg_val);
+            nr_token++;
+            break;
+          case '+':
+          case '-':
+          case '*':
+          case '/':
+          case '(':
+          case ')':
+          case '=':
+            tokens[nr_token].type = rules[i].token_type;
+            strncpy(tokens[nr_token].str, substr_start, substr_len);
+            tokens[nr_token].str[substr_len] = '\0';
+            nr_token++;
+            break;
+          default:
+            TODO();
+            break;
         }
 
         break;
@@ -111,6 +139,60 @@ static bool make_token(char *e) {
   return true;
 }
 
+int find_main_operator(int p, int q) {
+  int level = 0;
+  int main_op = -1;
+
+  for (int i = p; i <= q; i++) {
+    if (tokens[i].type == '(') {
+      level++;
+    } else if (tokens[i].type == ')') {
+      level--;
+    } else if (level == 0) {
+      if (tokens[i].type == '+' || tokens[i].type == '-') {
+        main_op = i;
+      } else if ((tokens[i].type == '*' || tokens[i].type == '/') && main_op == -1) {
+        main_op = i;
+      }
+    }
+  }
+
+  return main_op;
+}
+
+/*
+<expr> ::= <number>    # 一个数是表达式
+  | "(" <expr> ")"     # 在表达式两边加个括号也是表达式
+  | <expr> "+" <expr>  # 两个表达式相加也是表达式
+  | <expr> "-" <expr>  # 接下来你全懂了
+  | <expr> "*" <expr>
+  | <expr> "/" <expr>
+*/
+int eval(int p, int q) {
+  if (p > q) {
+    panic("Bad expression");
+  } else if (p == q) {
+    if (tokens[p].type == 'd') {
+      return atoi(tokens[p].str);
+    } else {
+      panic("Invalid token type");
+    }
+  } else if (tokens[p].type == '(' && tokens[q].type == ')') {
+    return eval(p + 1, q - 1);
+  } else {
+    int op = find_main_operator(p, q);
+    int val1 = eval(p, op - 1);
+    int val2 = eval(op + 1, q);
+
+    switch (tokens[op].type) {
+      case '+': return val1 + val2;
+      case '-': return val1 - val2;
+      case '*': return val1 * val2;
+      case '/': return val1 / val2;
+      default: panic("Invalid operator");
+    }
+  }
+}
 
 word_t expr(char *e, bool *success) {
   if (!make_token(e)) {
@@ -118,8 +200,6 @@ word_t expr(char *e, bool *success) {
     return 0;
   }
 
-  /* TODO: Insert codes to evaluate the expression. */
-  TODO();
-
-  return 0;
+  *success = true;
+  return eval(0, nr_token - 1);
 }
